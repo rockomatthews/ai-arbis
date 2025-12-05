@@ -43,5 +43,6 @@ Notes:
 - `MIN_NOTIONAL` must satisfy each venue’s minimum order size; OKX/Binance.US publish per-market tables.
 - `MAX_POSITION` caps total notional per leg; tune based on capital and risk limits.
 - `LATENCY_MS` is used by the simulator; set to your typical round-trip latency for future tuning.
+- Run `REPORT_INITIAL_BALANCE=2000 npm run report` after stopping the bot to see dry-run balances/PnL (defaults to $2k per exchange).
 
 # ai-arbis
