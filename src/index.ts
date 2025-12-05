@@ -15,10 +15,13 @@ const metrics = new MetricsTracker();
 router.registerExchange(exchangeA);
 router.registerExchange(exchangeB);
 
-const engine = new ExecutionEngine({
-  [exchangeA.name]: exchangeA,
-  [exchangeB.name]: exchangeB
-});
+const engine = new ExecutionEngine(
+  {
+    [exchangeA.name]: exchangeA,
+    [exchangeB.name]: exchangeB
+  },
+  config.dryRun
+);
 
 const strategy = new CrossExchangeStrategy(router);
 

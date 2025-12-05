@@ -9,6 +9,7 @@ PAIRS=BTCUSDT,ETHUSDT
 SLIPPAGE_BPS=5
 MIN_NET_SPREAD_BPS=15
 MAX_CONCURRENT_SIGNALS=3
+DRY_RUN=true                 # set false when you want to hit live APIs
 
 # Exchange A: Binance.US
 EXCHANGE_A_NAME=BinanceUS

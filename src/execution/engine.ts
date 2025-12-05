@@ -15,7 +15,10 @@ export class ExecutionEngine {
   private consecutiveFailures = 0;
   private pausedUntil = 0;
 
-  constructor(private readonly connectors: ConnectorMap) {}
+  constructor(
+    private readonly connectors: ConnectorMap,
+    private readonly dryRun: boolean
+  ) {}
 
   start(): void {
     eventBus.on('signal', (signal) => {
@@ -70,6 +73,27 @@ export class ExecutionEngine {
       price: opportunity.sellPrice * (1 - slippageDecimal),
       type: 'limit'
     };
+
+    if (this.dryRun) {
+      const simulatedPnl =
+        (sellOrder.price - buyOrder.price) * sellOrder.quantity;
+      logger.info('Dry run execution', {
+        opportunityId: opportunity.id,
+        buyOrder,
+        sellOrder,
+        pnlUsd: simulatedPnl.toFixed(2)
+      });
+      tradeStore.record(opportunity, simulatedPnl);
+      this.emitReport({
+        opportunityId: opportunity.id,
+        success: true,
+        filledSize: opportunity.quantity,
+        pnlUsd: simulatedPnl,
+        message: 'Dry run',
+        timestamp: Date.now()
+      });
+      return;
+    }
 
     const [buyResult, sellResult] = await Promise.all([
       buyConnector.placeOrder(buyOrder),
