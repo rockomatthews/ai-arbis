@@ -15,6 +15,19 @@ if (!fs.existsSync(DB_PATH)) {
 
 const initialBalance = Number(process.env.REPORT_INITIAL_BALANCE ?? 2_000);
 
+type TradeRow = {
+  id: string;
+  symbol: string;
+  buyExchange: string;
+  sellExchange: string;
+  quantity: number;
+  buyPrice: number;
+  sellPrice: number;
+  netSpreadBps: number;
+  pnl: number;
+  createdAt: number;
+};
+
 const db = new Database(DB_PATH, { readonly: true });
 const rows = db
   .prepare(
@@ -24,14 +37,12 @@ const rows = db
      FROM trades
      ORDER BY created_at ASC`
   )
-  .all();
+  .all() as TradeRow[];
 
 if (!rows.length) {
   console.info('No trades recorded yet.');
   process.exit(0);
 }
-
-type TradeRow = (typeof rows)[number];
 
 const exchangeNames = [
   config.exchanges.exchangeA.name,
@@ -57,8 +68,7 @@ const updateBalance = (exchange: string, delta: number): void => {
   balances[exchange] += delta;
 };
 
-rows.forEach((row) => {
-  const trade = row as TradeRow;
+rows.forEach((trade) => {
   const buyNotional = trade.quantity * trade.buyPrice;
   const sellNotional = trade.quantity * trade.sellPrice;
 

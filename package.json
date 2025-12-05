@@ -8,7 +8,7 @@
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn --transpileOnly src/index.ts",
     "lint": "eslint .",
-    "report": "ts-node src/tools/report.ts"
+    "report": "node --loader ts-node/esm src/tools/report.ts"
   },
   "dependencies": {
     "axios": "^1.7.7",
