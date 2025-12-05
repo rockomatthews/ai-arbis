@@ -57,7 +57,8 @@ const updateBalance = (exchange: string, delta: number): void => {
   balances[exchange] += delta;
 };
 
-rows.forEach((trade: TradeRow) => {
+rows.forEach((row) => {
+  const trade = row as TradeRow;
   const buyNotional = trade.quantity * trade.buyPrice;
   const sellNotional = trade.quantity * trade.sellPrice;
 
