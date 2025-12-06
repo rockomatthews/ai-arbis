@@ -88,7 +88,7 @@ export class CrossExchangeStrategy {
       slippageBps: config.slippageBps
     });
 
-    logger.debug('Spread snapshot', {
+    logger.info('Spread snapshot', {
       symbol,
       buyExchange: buyCfg.name,
       sellExchange: sellCfg.name,
@@ -96,6 +96,14 @@ export class CrossExchangeStrategy {
       sellPrice: sellPrice.toFixed(2),
       netBpsValue: netBpsValue.toFixed(3)
     });
+
+    if (netBpsValue > -1) {
+      logger.info('Near signal window', {
+        symbol,
+        direction: `${buyCfg.name}->${sellCfg.name}`,
+        netBpsValue: netBpsValue.toFixed(3)
+      });
+    }
 
     if (netBpsValue < config.minNetSpreadBps) {
       return;
