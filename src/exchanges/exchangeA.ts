@@ -50,7 +50,7 @@ export class ExchangeAConnector extends BaseExchange {
     }
 
     const streams = this.pairs
-      .map((symbol) => `${symbol.toLowerCase()}@depth20@100ms`)
+      .map((symbol) => `${symbol.toLowerCase()}@depth20`)
       .join('/');
     const url = `${this.cfg.wsUrl}?streams=${streams}`;
 
@@ -71,12 +71,15 @@ export class ExchangeAConnector extends BaseExchange {
     });
 
     this.ws.on('error', (error) => {
-      logger.error('BinanceUS WS error', { error });
+      logger.error('BinanceUS WS error', { error: error.message });
       this.ws?.terminate();
     });
 
-    this.ws.on('close', () => {
-      logger.warn('BinanceUS WS closed, scheduling reconnect');
+    this.ws.on('close', (code, reason) => {
+      logger.warn('BinanceUS WS closed, scheduling reconnect', {
+        code,
+        reason: reason.toString()
+      });
       this.scheduleReconnect();
     });
   }
