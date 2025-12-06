@@ -88,6 +88,15 @@ export class CrossExchangeStrategy {
       slippageBps: config.slippageBps
     });
 
+    logger.debug('Spread snapshot', {
+      symbol,
+      buyExchange: buyCfg.name,
+      sellExchange: sellCfg.name,
+      buyPrice: buyPrice.toFixed(2),
+      sellPrice: sellPrice.toFixed(2),
+      netBpsValue: netBpsValue.toFixed(3)
+    });
+
     if (netBpsValue < config.minNetSpreadBps) {
       return;
     }
