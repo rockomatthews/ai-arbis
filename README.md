@@ -10,6 +10,9 @@ SLIPPAGE_BPS=5
 MIN_NET_SPREAD_BPS=15
 MAX_CONCURRENT_SIGNALS=3
 DRY_RUN=true                 # set false when you want to hit live APIs
+DRY_RUN_START_BALANCE=2000   # dry-run bankroll per exchange
+DRY_RUN_MAX_SLIPPAGE_BPS=15  # random extra slippage applied in dry-run
+DRY_RUN_FAILURE_PCT=5        # % chance a dry-run trade fails
 
 # Exchange A: Binance.US
 EXCHANGE_A_NAME=BinanceUS
@@ -44,5 +47,6 @@ Notes:
 - `MAX_POSITION` caps total notional per leg; tune based on capital and risk limits.
 - `LATENCY_MS` is used by the simulator; set to your typical round-trip latency for future tuning.
 - Run `REPORT_INITIAL_BALANCE=2000 npm run report` after stopping the bot to see dry-run balances/PnL (defaults to $2k per exchange).
+- Market data is sourced via Binance.US `/api/v3/depth` and OKX `/api/v5/market/books` polling. Make sure your API keys have read scopes and the IP is whitelisted.
 
 # ai-arbis

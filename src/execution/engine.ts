@@ -8,17 +8,34 @@ import { BaseExchange } from '../exchanges/baseExchange.js';
 import { eventBus } from '../lib/eventBus.js';
 import { logger } from '../lib/logger.js';
 import { tradeStore } from './tradeStore.js';
+import { BalanceLedger } from '../sim/balanceLedger.js';
 
 type ConnectorMap = Record<string, BaseExchange>;
+type DryRunOptions = {
+  initialBalance: number;
+  maxSlippageBps: number;
+  failureChancePct: number;
+};
 
 export class ExecutionEngine {
   private consecutiveFailures = 0;
   private pausedUntil = 0;
+  private readonly ledger?: BalanceLedger;
+  private readonly dryRunOptions?: DryRunOptions;
 
   constructor(
     private readonly connectors: ConnectorMap,
-    private readonly dryRun: boolean
-  ) {}
+    private readonly dryRun: boolean,
+    options?: DryRunOptions
+  ) {
+    this.dryRunOptions = options;
+    if (this.dryRun) {
+      this.ledger = new BalanceLedger(
+        Object.keys(connectors),
+        options?.initialBalance ?? 0
+      );
+    }
+  }
 
   start(): void {
     eventBus.on('signal', (signal) => {
@@ -74,16 +91,66 @@ export class ExecutionEngine {
       type: 'limit'
     };
 
+    const extraSlippageBps = this.dryRun
+      ? Math.random() * (this.dryRunOptions?.maxSlippageBps ?? 0)
+      : 0;
+    const extraSlippageDecimal = bpsToDecimal(extraSlippageBps);
+
+    const buyFillPrice = buyOrder.price * (1 + extraSlippageDecimal);
+    const sellFillPrice = sellOrder.price * (1 - extraSlippageDecimal);
+
+    const buyNotional = buyOrder.quantity * buyFillPrice;
+    const sellNotional = sellOrder.quantity * sellFillPrice;
+
+    if (this.dryRun && this.ledger) {
+      if (!this.ledger.canDebit(opportunity.legBuyExchange, buyNotional)) {
+        logger.warn('Dry run skipped: insufficient balance', {
+          exchange: opportunity.legBuyExchange,
+          required: buyNotional.toFixed(2),
+          available: this.ledger.getBalance(
+            opportunity.legBuyExchange
+          ).toFixed(2)
+        });
+        this.emitReport({
+          opportunityId: opportunity.id,
+          success: false,
+          message: 'Insufficient dry-run balance',
+          timestamp: Date.now()
+        });
+        return;
+      }
+    }
+
     if (this.dryRun) {
-      const simulatedPnl =
-        (sellOrder.price - buyOrder.price) * sellOrder.quantity;
+      const failureChance = this.dryRunOptions?.failureChancePct ?? 0;
+      if (failureChance > 0 && Math.random() * 100 < failureChance) {
+        logger.warn('Dry run simulated failure', {
+          opportunityId: opportunity.id
+        });
+        this.emitReport({
+          opportunityId: opportunity.id,
+          success: false,
+          message: 'Dry run failure simulation',
+          timestamp: Date.now()
+        });
+        return;
+      }
+
+      const simulatedPnl = sellNotional - buyNotional;
       logger.info('Dry run execution', {
         opportunityId: opportunity.id,
         buyOrder,
         sellOrder,
-        pnlUsd: simulatedPnl.toFixed(2)
+        pnlUsd: simulatedPnl.toFixed(2),
+        extraSlippageBps: extraSlippageBps.toFixed(2)
       });
       tradeStore.record(opportunity, simulatedPnl);
+      this.ledger?.applyTrade(
+        opportunity.legBuyExchange,
+        opportunity.legSellExchange,
+        buyNotional,
+        sellNotional
+      );
       this.emitReport({
         opportunityId: opportunity.id,
         success: true,

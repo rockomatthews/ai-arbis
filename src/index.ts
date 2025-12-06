@@ -20,7 +20,12 @@ const engine = new ExecutionEngine(
     [exchangeA.name]: exchangeA,
     [exchangeB.name]: exchangeB
   },
-  config.dryRun
+  config.dryRun,
+  {
+    initialBalance: config.dryRunStartBalance,
+    maxSlippageBps: config.dryRunMaxSlippageBps,
+    failureChancePct: config.dryRunFailureChancePct
+  }
 );
 
 const strategy = new CrossExchangeStrategy(router);

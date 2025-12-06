@@ -24,6 +24,9 @@ const configSchema = z.object({
   minNetSpreadBps: z.number().nonnegative(),
   maxConcurrentSignals: z.number().int().positive(),
   dryRun: z.boolean().default(false),
+  dryRunStartBalance: z.number().nonnegative().default(2_000),
+  dryRunMaxSlippageBps: z.number().nonnegative().default(10),
+  dryRunFailureChancePct: z.number().min(0).max(100).default(5),
   exchanges: z.object({
     exchangeA: exchangeSchema,
     exchangeB: exchangeSchema
@@ -37,6 +40,9 @@ const rawConfig = {
   minNetSpreadBps: Number(process.env.MIN_NET_SPREAD_BPS ?? 15),
   maxConcurrentSignals: Number(process.env.MAX_CONCURRENT_SIGNALS ?? 3),
   dryRun: String(process.env.DRY_RUN ?? 'false').toLowerCase() === 'true',
+  dryRunStartBalance: Number(process.env.DRY_RUN_START_BALANCE ?? 2_000),
+  dryRunMaxSlippageBps: Number(process.env.DRY_RUN_MAX_SLIPPAGE_BPS ?? 10),
+  dryRunFailureChancePct: Number(process.env.DRY_RUN_FAILURE_PCT ?? 5),
   exchanges: {
     exchangeA: {
       name: process.env.EXCHANGE_A_NAME ?? 'ExchangeA',

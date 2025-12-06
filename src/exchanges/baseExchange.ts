@@ -43,7 +43,7 @@ const DEFAULT_BALANCES: BalanceSummary[] = [
 export abstract class BaseExchange extends EventEmitter<ExchangeConnectorEvents> {
   protected running = false;
   protected pairs: string[] = [];
-  private timer?: NodeJS.Timeout;
+  protected simTimer?: NodeJS.Timeout;
   private readonly basePrices: Record<string, number> = {};
 
   protected constructor(protected readonly cfg: ExchangeConfig) {
@@ -57,16 +57,13 @@ export abstract class BaseExchange extends EventEmitter<ExchangeConnectorEvents>
     this.running = true;
     await this.bootstrap();
     this.emitBalances();
-    this.startSimulatedFeed();
+    await this.startMarketData();
     logger.info('Exchange started', { exchange: this.name, pairs: this.pairs });
   }
 
   async stop(): Promise<void> {
     this.running = false;
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = undefined;
-    }
+    await this.stopMarketData();
     await this.teardown();
     logger.info('Exchange stopped', { exchange: this.name });
   }
@@ -87,6 +84,17 @@ export abstract class BaseExchange extends EventEmitter<ExchangeConnectorEvents>
     this.emit('balance', balance);
   }
 
+  protected async startMarketData(): Promise<void> {
+    this.startSimulatedFeed();
+  }
+
+  protected async stopMarketData(): Promise<void> {
+    if (this.simTimer) {
+      clearInterval(this.simTimer);
+      this.simTimer = undefined;
+    }
+  }
+
   private emitBalances(): void {
     DEFAULT_BALANCES.forEach((balance) =>
       this.emitBalance({ ...balance, exchange: this.name })
@@ -96,7 +104,7 @@ export abstract class BaseExchange extends EventEmitter<ExchangeConnectorEvents>
   private startSimulatedFeed(): void {
     const interval = Math.max(this.cfg.targetLatencyMs, 200);
 
-    this.timer = setInterval(() => {
+    this.simTimer = setInterval(() => {
       if (!this.running) {
         return;
       }
