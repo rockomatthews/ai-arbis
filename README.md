@@ -5,9 +5,9 @@ Create a `.env` file (never commit with secrets) and populate the following keys
 
 ```env
 NODE_ENV=development
-PAIRS=BTCUSDT,ETHUSDT
-SLIPPAGE_BPS=5
-MIN_NET_SPREAD_BPS=15
+PAIRS=BTCUSDT,ETHUSDT,SOLUSDT
+SLIPPAGE_BPS=3              # realistic slippage buffer per leg (set to 0 only when testing)
+MIN_NET_SPREAD_BPS=8        # minimum net spread after fees/slippage (raise once testing is done)
 MAX_CONCURRENT_SIGNALS=3
 DRY_RUN=true                 # set false when you want to hit live APIs
 DRY_RUN_START_BALANCE=2000   # dry-run bankroll per exchange
@@ -43,10 +43,16 @@ EXCHANGE_B_LATENCY_MS=220
 
 Notes:
 - Maker/taker bps should reflect your actual fee tier; 1 bp = 0.01%.
+- When you finish debugging with `SLIPPAGE_BPS=0`/`MIN_NET_SPREAD_BPS=0`, reset them to realistic numbers (e.g., 2–4 bps slippage, ≥6–10 bps net spread) so the bot only fires on spreads that survive fees.
 - `MIN_NOTIONAL` must satisfy each venue’s minimum order size; OKX/Binance.US publish per-market tables.
 - `MAX_POSITION` caps total notional per leg; tune based on capital and risk limits.
 - `LATENCY_MS` is used by the simulator; set to your typical round-trip latency for future tuning.
 - Run `REPORT_INITIAL_BALANCE=2000 npm run report` after stopping the bot to see dry-run balances/PnL (defaults to $2k per exchange).
-- Market data is sourced via Binance.US `/api/v3/depth` and OKX `/api/v5/market/books` polling. Make sure your API keys have read scopes and the IP is whitelisted.
+- Market data is streamed via Binance.US combined depth websockets (`@depth20@100ms`) and OKX `books5` websockets. Keep your `PAIRS` list confined to symbols supported on *both* exchanges (e.g., `BTCUSDT,ETHUSDT,SOLUSDT`). Update `EXCHANGE_*_WS_URL` only if you need to point at regional endpoints.
+
+## Adding More Pairs or Venues
+- Extend the `PAIRS` env var with comma-separated symbols; the bot automatically subscribes to live depth feeds for each.
+- If you want to experiment with other exchange combinations (e.g., OKX perps vs Binance spot), clone the existing connector classes under `src/exchanges/` and wire them into `src/index.ts`.
+- For high-frequency spreads, prefer websockets (already enabled) over REST polling; if you add new venues, use their streaming depth APIs when possible.
 
 # ai-arbis

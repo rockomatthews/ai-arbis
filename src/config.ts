@@ -46,8 +46,11 @@ const rawConfig = {
   exchanges: {
     exchangeA: {
       name: process.env.EXCHANGE_A_NAME ?? 'ExchangeA',
-      restBaseUrl: process.env.EXCHANGE_A_REST_URL ?? 'https://api.exchangea.example',
-      wsUrl: process.env.EXCHANGE_A_WS_URL ?? 'wss://stream.exchangea.example/market',
+      restBaseUrl:
+        process.env.EXCHANGE_A_REST_URL ?? 'https://api.binance.us',
+      wsUrl:
+        process.env.EXCHANGE_A_WS_URL ??
+        'wss://stream.binance.us:9443/stream',
       apiKey: process.env.EXCHANGE_A_API_KEY,
       apiSecret: process.env.EXCHANGE_A_API_SECRET,
       passphrase: process.env.EXCHANGE_A_PASSPHRASE,
@@ -59,8 +62,11 @@ const rawConfig = {
     },
     exchangeB: {
       name: process.env.EXCHANGE_B_NAME ?? 'ExchangeB',
-      restBaseUrl: process.env.EXCHANGE_B_REST_URL ?? 'https://api.exchangeb.example',
-      wsUrl: process.env.EXCHANGE_B_WS_URL ?? 'wss://stream.exchangeb.example/market',
+      restBaseUrl:
+        process.env.EXCHANGE_B_REST_URL ?? 'https://www.okx.com',
+      wsUrl:
+        process.env.EXCHANGE_B_WS_URL ??
+        'wss://ws.okx.com:8443/ws/v5/public',
       apiKey: process.env.EXCHANGE_B_API_KEY,
       apiSecret: process.env.EXCHANGE_B_API_SECRET,
       passphrase: process.env.EXCHANGE_B_PASSPHRASE,

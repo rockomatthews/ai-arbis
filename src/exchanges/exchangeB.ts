@@ -1,14 +1,35 @@
-import axios from 'axios';
+import WebSocket from 'ws';
 import { config } from '../config.js';
 import { OrderBookSnapshot } from '../core/types.js';
 import { logger } from '../lib/logger.js';
 import { BaseExchange } from './baseExchange.js';
 
-const toOkxInstId = (symbol: string): string =>
-  `${symbol.slice(0, -4)}-${symbol.slice(-4)}`;
+const KNOWN_QUOTES = ['USDT', 'USDC', 'USD'];
+
+const toOkxInstId = (symbol: string): string => {
+  const quote = KNOWN_QUOTES.find((suffix) => symbol.endsWith(suffix));
+  if (!quote) {
+    throw new Error(`Unsupported OKX quote asset for symbol ${symbol}`);
+  }
+
+  const base = symbol.slice(0, -quote.length);
+  return `${base}-${quote}`;
+};
+
+type OkxMessage =
+  | { event: string; arg?: { instId: string } }
+  | {
+      arg: { channel: string; instId: string };
+      data: Array<{
+        asks: [string, string][];
+        bids: [string, string][];
+        ts: string;
+      }>;
+    };
 
 export class ExchangeBConnector extends BaseExchange {
-  private timer?: NodeJS.Timeout;
+  private ws?: WebSocket;
+  private reconnectTimer?: NodeJS.Timeout;
 
   constructor() {
     super(config.exchanges.exchangeB);
@@ -19,73 +40,121 @@ export class ExchangeBConnector extends BaseExchange {
   }
 
   protected override async startMarketData(): Promise<void> {
-    await this.pollAll();
-    const interval = Math.max(this.cfg.targetLatencyMs, 500);
-    this.timer = setInterval(() => {
-      void this.pollAll();
-    }, interval);
+    this.connect();
   }
 
   protected override async stopMarketData(): Promise<void> {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = undefined;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
+    if (this.ws) {
+      this.ws.removeAllListeners();
+      this.ws.close();
+      this.ws = undefined;
     }
   }
 
-  private async pollAll(): Promise<void> {
-    for (const symbol of this.pairs) {
+  private connect(): void {
+    this.ws = new WebSocket(this.cfg.wsUrl);
+
+    this.ws.on('open', () => {
+      logger.info('OKX WS connected');
+      this.subscribe();
+    });
+
+    this.ws.on('message', (raw) => {
       try {
-        const snapshot = await this.fetchDepth(symbol);
-        this.emitOrderBook(snapshot);
+        this.handleMessage(raw.toString());
       } catch (error) {
-        logger.warn('OKX depth poll failed', {
-          symbol,
-          error: (error as Error).message
-        });
+        logger.warn('OKX WS parse error', { error: (error as Error).message });
       }
+    });
+
+    this.ws.on('error', (error) => {
+      logger.error('OKX WS error', { error });
+      this.ws?.terminate();
+    });
+
+    this.ws.on('close', () => {
+      logger.warn('OKX WS closed, scheduling reconnect');
+      this.scheduleReconnect();
+    });
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
+    this.reconnectTimer = setTimeout(() => {
+      this.connect();
+    }, 2_000);
+  }
+
+  private subscribe(): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const args = this.pairs.map((symbol) => ({
+      channel: 'books5',
+      instId: toOkxInstId(symbol)
+    }));
+
+    this.ws.send(
+      JSON.stringify({
+        op: 'subscribe',
+        args
+      })
+    );
+  }
+
+  private handleMessage(raw: string): void {
+    if (raw === 'pong') {
+      return;
+    }
+
+    const payload = JSON.parse(raw) as OkxMessage;
+
+    if ('event' in payload) {
+      if (payload.event === 'ping' && this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ op: 'pong' }));
+      }
+      return;
+    }
+
+    if (!payload?.data?.length) {
+      return;
+    }
+
+    for (const book of payload.data) {
+      const snapshot: OrderBookSnapshot = {
+        exchange: this.name,
+        symbol: this.findSymbolByInstId(payload.arg.instId),
+        bids: book.bids.map(([price, size]) => ({
+          price: Number(price),
+          size: Number(size)
+        })),
+        asks: book.asks.map(([price, size]) => ({
+          price: Number(price),
+          size: Number(size)
+        })),
+        lastUpdateId: Number(book.ts),
+        receivedAt: Date.now()
+      };
+
+      this.emitOrderBook(snapshot);
     }
   }
 
-  private async fetchDepth(symbol: string): Promise<OrderBookSnapshot> {
-    const instId = toOkxInstId(symbol);
-    const response = await axios.get(
-      `${this.cfg.restBaseUrl}/api/v5/market/books`,
-      {
-        params: { instId, sz: 10 },
-        timeout: 3_000
-      }
-    );
-
-    const payload = response.data as {
-      code: string;
-      data: Array<{
-        asks: [string, string][];
-        bids: [string, string][];
-        ts: string;
-      }>;
-    };
-
-    if (payload.code !== '0' || !payload.data?.length) {
-      throw new Error(`OKX error code ${payload.code}`);
+  private findSymbolByInstId(instId: string): string {
+    const [base, quote] = instId.split('-');
+    const symbol = `${base}${quote}`;
+    if (!this.pairs.includes(symbol)) {
+      // If not explicitly listed (e.g., due to lowercase), default to instId concatenation.
+      return symbol;
     }
-
-    const book = payload.data[0];
-
-    return {
-      exchange: this.name,
-      symbol,
-      bids: book.bids.map(([price, size]) => ({
-        price: Number(price),
-        size: Number(size)
-      })),
-      asks: book.asks.map(([price, size]) => ({
-        price: Number(price),
-        size: Number(size)
-      })),
-      lastUpdateId: Number(book.ts),
-      receivedAt: Date.now()
-    };
+    return symbol;
   }
 }
 

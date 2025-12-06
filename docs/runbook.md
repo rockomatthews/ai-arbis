@@ -17,10 +17,10 @@ npm run dev   # hot reload / development
 npm start     # runs compiled JS from dist
 ```
 
-The bot boots both exchange connectors, streams market data, emits arbitrage signals, and executes both legs when net spread thresholds are met. Logs are JSON for easy ingestion into ELK or Loki.
+The bot boots both exchange connectors, streams market data over websockets, emits arbitrage signals, and executes both legs when net spread thresholds are met. Logs are JSON for easy ingestion into ELK or Loki.
 
 ### Dry-Run / Simulation
-- Set `DRY_RUN=true` plus bankroll/variance knobs (`DRY_RUN_START_BALANCE`, `DRY_RUN_MAX_SLIPPAGE_BPS`, `DRY_RUN_FAILURE_PCT`) in `.env`.
+- Set `PAIRS` to every symbol you want to simulate (ensure each exists on both exchanges) and `DRY_RUN=true` plus bankroll/variance knobs (`DRY_RUN_START_BALANCE`, `DRY_RUN_MAX_SLIPPAGE_BPS`, `DRY_RUN_FAILURE_PCT`) in `.env`.
 - Start the bot (`node dist/index.js`) and let it run; every trade debits/credits an in-memory balance per exchange and introduces random slippage/failure so PnL can go negative.
 - Stop the bot and run `REPORT_INITIAL_BALANCE=2000 npm run report` to summarize trades and ending balances (change the seed value to match your bankroll assumptions).
 

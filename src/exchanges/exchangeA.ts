@@ -1,11 +1,23 @@
-import axios from 'axios';
+import WebSocket from 'ws';
 import { config } from '../config.js';
 import { OrderBookSnapshot } from '../core/types.js';
 import { logger } from '../lib/logger.js';
 import { BaseExchange } from './baseExchange.js';
 
+type BinanceDepthMessage = {
+  stream?: string;
+  data: {
+    E: number;
+    s: string;
+    b: [string, string][];
+    a: [string, string][];
+    u: number;
+  };
+};
+
 export class ExchangeAConnector extends BaseExchange {
-  private timer?: NodeJS.Timeout;
+  private ws?: WebSocket;
+  private reconnectTimer?: NodeJS.Timeout;
 
   constructor() {
     super(config.exchanges.exchangeA);
@@ -16,63 +28,90 @@ export class ExchangeAConnector extends BaseExchange {
   }
 
   protected override async startMarketData(): Promise<void> {
-    await this.pollAll();
-    const interval = Math.max(this.cfg.targetLatencyMs, 500);
-    this.timer = setInterval(() => {
-      void this.pollAll();
-    }, interval);
+    this.connect();
   }
 
   protected override async stopMarketData(): Promise<void> {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = undefined;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
+
+    if (this.ws) {
+      this.ws.removeAllListeners();
+      this.ws.close();
+      this.ws = undefined;
     }
   }
 
-  private async pollAll(): Promise<void> {
-    for (const symbol of this.pairs) {
+  private connect(): void {
+    if (!this.pairs.length) {
+      return;
+    }
+
+    const streams = this.pairs
+      .map((symbol) => `${symbol.toLowerCase()}@depth20@100ms`)
+      .join('/');
+    const url = `${this.cfg.wsUrl}?streams=${streams}`;
+
+    this.ws = new WebSocket(url);
+
+    this.ws.on('open', () => {
+      logger.info('BinanceUS WS connected', { streams });
+    });
+
+    this.ws.on('message', (raw) => {
       try {
-        const snapshot = await this.fetchDepth(symbol);
-        this.emitOrderBook(snapshot);
+        this.handleMessage(raw.toString());
       } catch (error) {
-        logger.warn('BinanceUS depth poll failed', {
-          symbol,
+        logger.warn('BinanceUS WS parse error', {
           error: (error as Error).message
         });
       }
-    }
+    });
+
+    this.ws.on('error', (error) => {
+      logger.error('BinanceUS WS error', { error });
+      this.ws?.terminate();
+    });
+
+    this.ws.on('close', () => {
+      logger.warn('BinanceUS WS closed, scheduling reconnect');
+      this.scheduleReconnect();
+    });
   }
 
-  private async fetchDepth(symbol: string): Promise<OrderBookSnapshot> {
-    const response = await axios.get(
-      `${this.cfg.restBaseUrl}/api/v3/depth`,
-      {
-        params: { symbol, limit: 10 },
-        timeout: 3_000
-      }
-    );
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
+    this.reconnectTimer = setTimeout(() => {
+      this.connect();
+    }, 2_000);
+  }
 
-    const data = response.data as {
-      lastUpdateId: number;
-      bids: [string, string][];
-      asks: [string, string][];
-    };
+  private handleMessage(raw: string): void {
+    const payload = JSON.parse(raw) as BinanceDepthMessage;
+    if (!payload?.data?.s) {
+      return;
+    }
 
-    return {
+    const snapshot: OrderBookSnapshot = {
       exchange: this.name,
-      symbol,
-      bids: data.bids.map(([price, size]) => ({
+      symbol: payload.data.s,
+      bids: payload.data.b.map(([price, size]) => ({
         price: Number(price),
         size: Number(size)
       })),
-      asks: data.asks.map(([price, size]) => ({
+      asks: payload.data.a.map(([price, size]) => ({
         price: Number(price),
         size: Number(size)
       })),
-      lastUpdateId: data.lastUpdateId,
+      lastUpdateId: payload.data.u,
       receivedAt: Date.now()
     };
+
+    this.emitOrderBook(snapshot);
   }
 }
 
