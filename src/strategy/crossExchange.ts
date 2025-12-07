@@ -52,6 +52,12 @@ export class CrossExchangeStrategy {
     sellCfg: ExchangeConfig
   ): void {
     if (!buyBook.asks.length || !sellBook.bids.length) {
+      logger.debug('Order book missing depth', {
+        symbol,
+        direction: `${buyCfg.name}->${sellCfg.name}`,
+        buyDepth: buyBook.asks.length,
+        sellDepth: sellBook.bids.length
+      });
       return;
     }
 
@@ -70,6 +76,12 @@ export class CrossExchangeStrategy {
     const quantity = Math.min(depthQty, maxQty);
 
     if (quantity <= 0 || quantity < minQty) {
+      logger.debug('Insufficient executable size', {
+        symbol,
+        direction: `${buyCfg.name}->${sellCfg.name}`,
+        quantity: quantity.toFixed(6),
+        minQty: minQty.toFixed(6)
+      });
       return;
     }
 
@@ -77,6 +89,11 @@ export class CrossExchangeStrategy {
     const sellPrice = effectivePrice(sellBook.bids, quantity);
 
     if (!buyPrice || !sellPrice) {
+      logger.debug('Unable to compute effective price', {
+        symbol,
+        direction: `${buyCfg.name}->${sellCfg.name}`,
+        quantity: quantity.toFixed(6)
+      });
       return;
     }
 
@@ -101,21 +118,40 @@ export class CrossExchangeStrategy {
       logger.info('Near signal window', {
         symbol,
         direction: `${buyCfg.name}->${sellCfg.name}`,
-        netBpsValue: netBpsValue.toFixed(3)
+        netBpsValue: netBpsValue.toFixed(3),
+        minNetSpreadBps: config.minNetSpreadBps.toFixed(3),
+        buyPrice: buyPrice.toFixed(4),
+        sellPrice: sellPrice.toFixed(4)
       });
     }
 
     if (netBpsValue < config.minNetSpreadBps) {
+      logger.info('No signal - below threshold', {
+        symbol,
+        direction: `${buyCfg.name}->${sellCfg.name}`,
+        netBpsValue: netBpsValue.toFixed(3),
+        minNetSpreadBps: config.minNetSpreadBps.toFixed(3)
+      });
       return;
     }
 
     if (this.activeSignals.size >= config.maxConcurrentSignals) {
+      logger.info('No signal - max concurrent reached', {
+        symbol,
+        activeSignals: this.activeSignals.size,
+        maxConcurrentSignals: config.maxConcurrentSignals
+      });
       return;
     }
 
     const key = `${symbol}:${buyCfg.name}->${sellCfg.name}`;
     const readyAt = this.coolDown.get(key);
     if (readyAt && readyAt > Date.now()) {
+      logger.info('No signal - cooling down', {
+        symbol,
+        direction: `${buyCfg.name}->${sellCfg.name}`,
+        readyAt
+      });
       return;
     }
 
