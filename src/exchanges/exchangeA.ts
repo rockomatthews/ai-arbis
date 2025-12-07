@@ -52,12 +52,19 @@ export class ExchangeAConnector extends BaseExchange {
     const streams = this.pairs
       .map((symbol) => `${symbol.toLowerCase()}@depth20`)
       .join('/');
-    const url = `${this.cfg.wsUrl}?streams=${streams}`;
+
+    const useCombinedStream = this.cfg.wsUrl.includes('/stream');
+    const url = useCombinedStream
+      ? `${this.cfg.wsUrl}?streams=${streams}`
+      : this.cfg.wsUrl;
 
     this.ws = new WebSocket(url);
 
     this.ws.on('open', () => {
       logger.info('BinanceUS WS connected', { streams });
+      if (!useCombinedStream) {
+        this.subscribe();
+      }
     });
 
     this.ws.on('message', (raw) => {
@@ -115,6 +122,24 @@ export class ExchangeAConnector extends BaseExchange {
     };
 
     this.emitOrderBook(snapshot);
+  }
+
+  private subscribe(): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const params = this.pairs.map((symbol) => `${symbol.toLowerCase()}@depth20`);
+
+    this.ws.send(
+      JSON.stringify({
+        method: 'SUBSCRIBE',
+        params,
+        id: Date.now()
+      })
+    );
+
+    logger.info('BinanceUS WS subscribed', { params });
   }
 }
 
