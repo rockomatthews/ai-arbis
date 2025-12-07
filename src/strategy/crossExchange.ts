@@ -11,10 +11,12 @@ import { logger } from '../lib/logger.js';
 import { MarketDataRouter } from '../feeds/marketDataRouter.js';
 
 const SIGNAL_TTL_MS = 2_000;
+const MISSING_BOOK_LOG_INTERVAL_MS = 5_000;
 
 export class CrossExchangeStrategy {
   private readonly coolDown = new Map<string, number>();
   private readonly activeSignals = new Set<string>();
+  private readonly missingBookLog = new Map<string, number>();
 
   constructor(private readonly router: MarketDataRouter) {}
 
@@ -37,6 +39,7 @@ export class CrossExchangeStrategy {
     const bookB = this.router.getSnapshot(cfgB.name, symbol);
 
     if (!bookA || !bookB) {
+      this.logBookAvailability(symbol, cfgA.name, cfgB.name, !!bookA, !!bookB);
       return;
     }
 
@@ -183,6 +186,31 @@ export class CrossExchangeStrategy {
       symbol,
       netSpreadBps: netBpsValue.toFixed(2),
       direction: `${buyCfg.name}->${sellCfg.name}`
+    });
+  }
+
+  private logBookAvailability(
+    symbol: string,
+    exchangeAName: string,
+    exchangeBName: string,
+    hasExchangeA: boolean,
+    hasExchangeB: boolean
+  ): void {
+    const key = `${symbol}:${Number(hasExchangeA)}:${Number(hasExchangeB)}`;
+    const now = Date.now();
+    const lastLogAt = this.missingBookLog.get(key) ?? 0;
+
+    if (now - lastLogAt < MISSING_BOOK_LOG_INTERVAL_MS) {
+      return;
+    }
+
+    this.missingBookLog.set(key, now);
+    logger.info('Awaiting counterpart order book', {
+      symbol,
+      availability: {
+        [exchangeAName]: hasExchangeA,
+        [exchangeBName]: hasExchangeB
+      }
     });
   }
 }
