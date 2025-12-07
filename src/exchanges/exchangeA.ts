@@ -54,9 +54,10 @@ export class ExchangeAConnector extends BaseExchange {
       .join('/');
 
     const useCombinedStream = this.cfg.wsUrl.includes('/stream');
+    const baseUrl = this.cfg.wsUrl.replace(/\/$/, '');
     const url = useCombinedStream
-      ? `${this.cfg.wsUrl}?streams=${streams}`
-      : this.cfg.wsUrl;
+      ? `${baseUrl}?streams=${streams}`
+      : `${baseUrl}/${Date.now()}`;
 
     this.ws = new WebSocket(url);
 
