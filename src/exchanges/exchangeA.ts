@@ -54,10 +54,17 @@ export class ExchangeAConnector extends BaseExchange {
       .join('/');
 
     const useCombinedStream = this.cfg.wsUrl.includes('/stream');
+    if (!useCombinedStream && this.pairs.length > 1) {
+      logger.warn(
+        'BinanceUS single-stream endpoint only supports one symbol; falling back to combined stream'
+      );
+    }
+
     const baseUrl = this.cfg.wsUrl.replace(/\/$/, '');
-    const url = useCombinedStream
-      ? `${baseUrl}?streams=${streams}`
-      : `${baseUrl}/${Date.now()}`;
+    const url =
+      useCombinedStream || this.pairs.length > 1
+        ? `${baseUrl}?streams=${streams}`
+        : `${baseUrl}/${this.pairs[0].toLowerCase()}@depth20`;
 
     this.ws = new WebSocket(url);
 
