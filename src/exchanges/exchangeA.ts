@@ -18,6 +18,7 @@ type BinanceDepthMessage = {
 export class ExchangeAConnector extends BaseExchange {
   private ws?: WebSocket;
   private reconnectTimer?: NodeJS.Timeout;
+  private hasLoggedFirstMessage = false;
 
   constructor() {
     super(config.exchanges.exchangeA);
@@ -38,9 +39,14 @@ export class ExchangeAConnector extends BaseExchange {
     }
 
     if (this.ws) {
-      this.ws.removeAllListeners();
-      this.ws.close();
+      const ws = this.ws;
       this.ws = undefined;
+      ws.removeAllListeners();
+      if (ws.readyState === WebSocket.CONNECTING) {
+        ws.terminate();
+      } else {
+        ws.close();
+      }
     }
   }
 
@@ -48,6 +54,8 @@ export class ExchangeAConnector extends BaseExchange {
     if (!this.pairs.length) {
       return;
     }
+
+    this.hasLoggedFirstMessage = false;
 
     const streams = this.pairs
       .map((symbol) => `${symbol.toLowerCase()}@depth20`)
@@ -122,6 +130,16 @@ export class ExchangeAConnector extends BaseExchange {
     const payload = JSON.parse(raw) as BinanceDepthMessage;
     if (!payload?.data?.s) {
       return;
+    }
+
+    if (!this.hasLoggedFirstMessage) {
+      this.hasLoggedFirstMessage = true;
+      logger.info('BinanceUS WS first depth', {
+        stream: payload.stream,
+        symbol: payload.data.s,
+        bids: payload.data.b.length,
+        asks: payload.data.a.length
+      });
     }
 
     const snapshot: OrderBookSnapshot = {
