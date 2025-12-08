@@ -53,24 +53,34 @@ export class ExchangeAConnector extends BaseExchange {
       .map((symbol) => `${symbol.toLowerCase()}@depth20`)
       .join('/');
 
-    const useCombinedStream = this.cfg.wsUrl.includes('/stream');
-    if (!useCombinedStream && this.pairs.length > 1) {
-      logger.warn(
-        'BinanceUS single-stream endpoint only supports one symbol; falling back to combined stream'
-      );
+    const wantsCombined = this.cfg.wsUrl.includes('/stream');
+    const needsCombined = this.pairs.length > 1;
+    const usingCombined = wantsCombined || needsCombined;
+
+    const parsed = new URL(this.cfg.wsUrl);
+    const hostBase = `${parsed.protocol}//${parsed.host}`;
+    const singlePath = parsed.pathname.replace(/\/$/, '') || '/ws';
+    const combinedPath = '/stream';
+
+    if (needsCombined && !wantsCombined) {
+      logger.warn('Switching to BinanceUS combined stream endpoint', {
+        from: this.cfg.wsUrl,
+        to: `${hostBase}${combinedPath}`
+      });
     }
 
-    const baseUrl = this.cfg.wsUrl.replace(/\/$/, '');
-    const url =
-      useCombinedStream || this.pairs.length > 1
-        ? `${baseUrl}?streams=${streams}`
-        : `${baseUrl}/${this.pairs[0].toLowerCase()}@depth20`;
+    const singleBase = `${hostBase}${singlePath}`;
+    const combinedBase = `${hostBase}${combinedPath}`;
+    const url = usingCombined
+      ? `${combinedBase}?streams=${streams}`
+      : `${singleBase}/${this.pairs[0].toLowerCase()}@depth20`;
 
+    logger.info('BinanceUS WS opening', { url, usingCombined, streams });
     this.ws = new WebSocket(url);
 
     this.ws.on('open', () => {
-      logger.info('BinanceUS WS connected', { streams });
-      if (!useCombinedStream) {
+      logger.info('BinanceUS WS connected', { url, streams });
+      if (!usingCombined) {
         this.subscribe();
       }
     });
