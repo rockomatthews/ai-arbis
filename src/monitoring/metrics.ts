@@ -1,5 +1,6 @@
 import { eventBus } from '../lib/eventBus.js';
 import { logger } from '../lib/logger.js';
+import { MetricsSnapshot } from '../core/types.js';
 
 interface Counters {
   signals: number;
@@ -43,7 +44,13 @@ export class MetricsTracker {
   }
 
   private flush(): void {
-    logger.info('Metrics snapshot', { ...this.counters });
+    const snapshot: MetricsSnapshot = {
+      timestamp: Date.now(),
+      ...this.counters
+    };
+
+    logger.info('Metrics snapshot', { ...snapshot });
+    eventBus.emit('metrics', snapshot);
   }
 }
 

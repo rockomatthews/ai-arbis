@@ -2,7 +2,8 @@ import { bpsToDecimal } from '../core/math.js';
 import {
   ExecutionReport,
   ExecutionSignal,
-  OrderRequest
+  OrderRequest,
+  Opportunity
 } from '../core/types.js';
 import { BaseExchange } from '../exchanges/baseExchange.js';
 import { eventBus } from '../lib/eventBus.js';
@@ -183,7 +184,7 @@ export class ExecutionEngine {
       filledSize: sellResult.filledQty,
       pnlUsd: pnl,
       timestamp: Date.now()
-    });
+    }, opportunity);
 
     logger.info('Executed arbitrage trade', {
       opportunityId: opportunity.id,
@@ -207,16 +208,31 @@ export class ExecutionEngine {
       error: error.message
     });
 
-    this.emitReport({
-      opportunityId: signal.opportunity.id,
-      success: false,
-      message: error.message,
-      timestamp: Date.now()
-    });
+    this.emitReport(
+      {
+        opportunityId: signal.opportunity.id,
+        success: false,
+        message: error.message,
+        timestamp: Date.now()
+      },
+      signal.opportunity
+    );
   }
 
-  private emitReport(report: ExecutionReport): void {
-    eventBus.emit('execution', report);
+  private emitReport(report: ExecutionReport, opportunity?: Opportunity): void {
+    const enriched = opportunity
+      ? {
+          symbol: opportunity.symbol,
+          buyExchange: opportunity.legBuyExchange,
+          sellExchange: opportunity.legSellExchange,
+          quantity: opportunity.quantity,
+          buyPrice: opportunity.buyPrice,
+          sellPrice: opportunity.sellPrice,
+          netSpreadBps: opportunity.netSpreadBps
+        }
+      : {};
+
+    eventBus.emit('execution', { ...enriched, ...report });
   }
 }
 

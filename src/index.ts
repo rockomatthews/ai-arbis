@@ -6,11 +6,13 @@ import { CrossExchangeStrategy } from './strategy/crossExchange.js';
 import { ExecutionEngine } from './execution/engine.js';
 import { logger } from './lib/logger.js';
 import { MetricsTracker } from './monitoring/metrics.js';
+import { PnlReporter } from './monitoring/pnlReporter.js';
 
 const router = new MarketDataRouter();
 const exchangeA = new ExchangeAConnector();
 const exchangeB = new ExchangeBConnector();
 const metrics = new MetricsTracker();
+const pnlReporter = new PnlReporter();
 
 router.registerExchange(exchangeA);
 router.registerExchange(exchangeB);
@@ -36,6 +38,10 @@ async function main(): Promise<void> {
     exchangeB.start(config.pairs)
   ]);
 
+  if (config.dryRun) {
+    await pnlReporter.start();
+  }
+
   engine.start();
   strategy.start();
   metrics.start();
@@ -49,6 +55,7 @@ async function main(): Promise<void> {
 async function shutdown(): Promise<void> {
   logger.info('Shutting down...');
   metrics.stop();
+  pnlReporter.stop();
   await Promise.all([exchangeA.stop(), exchangeB.stop()]);
   process.exit(0);
 }

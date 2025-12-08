@@ -48,7 +48,22 @@ export interface ExecutionReport {
   message?: string;
   filledSize?: number;
   pnlUsd?: number;
+  symbol?: string;
+  buyExchange?: string;
+  sellExchange?: string;
+  quantity?: number;
+  buyPrice?: number;
+  sellPrice?: number;
+  netSpreadBps?: number;
   timestamp: number;
+}
+
+export interface MetricsSnapshot {
+  timestamp: number;
+  signals: number;
+  executions: number;
+  failures: number;
+  pnl: number;
 }
 
 export interface OrderRequest {
