@@ -138,6 +138,11 @@ export class ExchangeAConnector extends BaseExchange {
       return;
     }
 
+    if (!Array.isArray(payload.data.b) || !Array.isArray(payload.data.a)) {
+      logger.warn('BinanceUS WS non-depth message ignored', { stream: payload.stream });
+      return;
+    }
+
     if (!this.hasLoggedFirstMessage) {
       this.hasLoggedFirstMessage = true;
       logger.info('BinanceUS WS first depth', {
