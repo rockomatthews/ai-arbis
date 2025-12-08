@@ -8,10 +8,13 @@ type BinanceDepthMessage = {
   stream?: string;
   data: {
     E: number;
-    s: string;
-    b: [string, string][];
-    a: [string, string][];
-    u: number;
+    s?: string;
+    b?: [string, string][];
+    a?: [string, string][];
+    bids?: [string, string][];
+    asks?: [string, string][];
+    u?: number;
+    lastUpdateId?: number;
   };
 };
 
@@ -138,8 +141,17 @@ export class ExchangeAConnector extends BaseExchange {
       return;
     }
 
-    if (!Array.isArray(payload.data.b) || !Array.isArray(payload.data.a)) {
-      logger.warn('BinanceUS WS non-depth message ignored', { stream: payload.stream });
+    const bidsRaw = payload.data.b ?? payload.data.bids;
+    const asksRaw = payload.data.a ?? payload.data.asks;
+
+    if (!Array.isArray(bidsRaw) || !Array.isArray(asksRaw)) {
+      logger.warn('BinanceUS WS non-depth message ignored', {
+        stream: payload.stream,
+        hasB: Array.isArray(payload.data.b),
+        hasBids: Array.isArray(payload.data.bids),
+        hasA: Array.isArray(payload.data.a),
+        hasAsks: Array.isArray(payload.data.asks)
+      });
       return;
     }
 
@@ -148,23 +160,23 @@ export class ExchangeAConnector extends BaseExchange {
       logger.info('BinanceUS WS first depth', {
         stream: payload.stream,
         symbol,
-        bids: payload.data.b.length,
-        asks: payload.data.a.length
+        bids: bidsRaw.length,
+        asks: asksRaw.length
       });
     }
 
     const snapshot: OrderBookSnapshot = {
       exchange: this.name,
       symbol,
-      bids: payload.data.b.map(([price, size]) => ({
+      bids: bidsRaw.map(([price, size]) => ({
         price: Number(price),
         size: Number(size)
       })),
-      asks: payload.data.a.map(([price, size]) => ({
+      asks: asksRaw.map(([price, size]) => ({
         price: Number(price),
         size: Number(size)
       })),
-      lastUpdateId: payload.data.u,
+      lastUpdateId: payload.data.u ?? payload.data.lastUpdateId ?? 0,
       receivedAt: Date.now()
     };
 
