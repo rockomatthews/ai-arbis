@@ -128,7 +128,13 @@ export class ExchangeAConnector extends BaseExchange {
 
   private handleMessage(raw: string): void {
     const payload = JSON.parse(raw) as BinanceDepthMessage;
-    if (!payload?.data?.s) {
+    if (!payload?.data) {
+      return;
+    }
+
+    const streamSymbol = payload.stream?.split('@')[0]?.toUpperCase();
+    const symbol = payload.data.s ?? streamSymbol;
+    if (!symbol) {
       return;
     }
 
@@ -136,7 +142,7 @@ export class ExchangeAConnector extends BaseExchange {
       this.hasLoggedFirstMessage = true;
       logger.info('BinanceUS WS first depth', {
         stream: payload.stream,
-        symbol: payload.data.s,
+        symbol,
         bids: payload.data.b.length,
         asks: payload.data.a.length
       });
@@ -144,7 +150,7 @@ export class ExchangeAConnector extends BaseExchange {
 
     const snapshot: OrderBookSnapshot = {
       exchange: this.name,
-      symbol: payload.data.s,
+      symbol,
       bids: payload.data.b.map(([price, size]) => ({
         price: Number(price),
         size: Number(size)
